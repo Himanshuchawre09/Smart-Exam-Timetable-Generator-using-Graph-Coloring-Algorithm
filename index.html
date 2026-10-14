@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ExamSync: Smart Exam Timetable Generator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="page-header">
+    <p class="eyebrow">EXAM TIMETABLE PLANNER</p>
+    <h1>ExamSync: Smart Exam Timetable Generator</h1>
+    <p class="subtitle">Graph Coloring (Backtracking vs Greedy)</p>
+  </header>
+
+  <main class="app-layout">
+    <section class="panel input-panel" aria-labelledby="input-title">
+      <div class="panel-heading">
+        <span class="section-number">01</span>
+        <h2 id="input-title">Input</h2>
+      </div>
+
+      <div class="field">
+        <label for="subjects-input">Subjects</label>
+        <textarea id="subjects-input" rows="4" placeholder="DAA, DBMS, OS"></textarea>
+        <p class="field-hint">Separate subject names with commas or new lines.</p>
+      </div>
+
+      <div class="field">
+        <label for="enrollments-input">Student enrollments</label>
+        <textarea
+          id="enrollments-input"
+          rows="9"
+          placeholder="Asha: DAA, OS, CN&#10;Ravi: DAA, DBMS"
+        ></textarea>
+        <p class="field-hint">Enter one student per line, followed by their subjects.</p>
+      </div>
+
+      <div class="button-row">
+        <button id="load-sample-button" class="button button-secondary" type="button">
+          Load sample data
+        </button>
+        <button id="load-trap-button" class="button button-secondary" type="button">
+          Load greedy-trap sample
+        </button>
+      </div>
+      <p class="sample-note">The subject order matters for Greedy.</p>
+      <button id="build-graph-button" class="button button-primary" type="button">
+        Build Graph
+      </button>
+
+      <div class="input-replay-controls">
+        <fieldset class="algorithm-selector">
+          <legend>Algorithm replay</legend>
+          <label>
+            <input type="radio" name="algorithm" value="greedy" checked>
+            Greedy
+          </label>
+          <label>
+            <input type="radio" name="algorithm" value="backtracking">
+            Backtracking (m-coloring)
+          </label>
+        </fieldset>
+        <fieldset class="algorithm-selector">
+          <legend>Backtracking mode</legend>
+          <label>
+            <input type="radio" name="backtracking-mode" value="basic">
+            Basic (textbook)
+          </label>
+          <label>
+            <input type="radio" name="backtracking-mode" value="optimized" checked>
+            Optimized (highest-degree first + symmetry breaking + clique start)
+          </label>
+        </fieldset>
+        <button id="run-algorithm-button" class="button button-primary" type="button">
+          Run algorithm
+        </button>
+        <div id="replay-notices" class="replay-notices" role="status" aria-live="polite"></div>
+        <div id="backtracking-info" class="backtracking-info" aria-live="polite"></div>
+      </div>
+
+      <div id="errors" class="error-area" role="alert" aria-live="polite"></div>
+    </section>
+
+    <section class="panel graph-panel" aria-labelledby="graph-title">
+      <div class="panel-heading graph-heading">
+        <div>
+          <span class="section-number">02</span>
+          <h2 id="graph-title">Conflict Graph</h2>
+        </div>
+        <div class="graph-heading-details">
+          <span class="graph-caption">Subjects connected by shared students</span>
+          <div id="graph-stats" class="graph-stats" aria-live="polite">
+            <span><b class="stat-value">—</b> subjects</span>
+            <span><b class="stat-value">—</b> conflicts</span>
+            <span><b class="stat-value">—</b> max degree</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="graph-frame">
+        <svg
+          id="conflict-graph"
+          viewBox="0 0 700 520"
+          role="img"
+          aria-label="Conflict graph will appear here after building"
+        >
+          <text class="empty-graph-label" x="350" y="260" text-anchor="middle">
+            Build a graph to see subject conflicts
+          </text>
+        </svg>
+      </div>
+
+      <section class="replay-panel" aria-labelledby="replay-title">
+        <div id="replay-readout" class="replay-readout" aria-live="polite">
+          <div class="playback-main">
+            <div class="step-position">No replay yet</div>
+            <div class="step-message">Build a graph, choose an algorithm, then run it.</div>
+            <span class="step-type-badge badge-idle">Ready</span>
+          </div>
+          <div class="playback-side">
+            <div class="replay-stats">
+              <div><span class="replay-stat-value">n/a</span><span class="replay-stat-label">Limit m</span></div>
+              <div><span class="replay-stat-value">0</span><span class="replay-stat-label">Backtracks</span></div>
+              <div><span class="replay-stat-value">0</span><span class="replay-stat-label">Slots</span></div>
+            </div>
+            <div class="replay-result"></div>
+          </div>
+        </div>
+
+        <section class="step-explanation" aria-labelledby="step-explanation-title" aria-live="polite" aria-atomic="true">
+          <h2 id="step-explanation-title" class="subsection-title">Current step explanation</h2>
+          <div class="step-explanation-grid">
+            <div><span>Step</span><strong id="explanation-step">—</strong></div>
+            <div><span>Vertex</span><strong id="explanation-vertex">—</strong></div>
+            <div><span>Attempted color</span><strong id="explanation-color">—</strong></div>
+            <div><span>Action</span><strong id="explanation-action">Ready</strong></div>
+            <div class="step-explanation-reason"><span>Reason</span><strong id="explanation-reason">Run an algorithm to begin the replay.</strong></div>
+          </div>
+        </section>
+
+        <div class="replay-controls" aria-label="Replay controls">
+          <button id="previous-step-button" class="button button-secondary" type="button" disabled>Previous</button>
+          <button id="next-step-button" class="button button-secondary" type="button" disabled>Next</button>
+          <button id="next-backtrack-button" class="button button-secondary" type="button" disabled>Next backtrack</button>
+          <button id="auto-run-button" class="button button-secondary" type="button" disabled>Play animation</button>
+          <button id="reset-replay-button" class="button button-secondary" type="button" disabled>Reset</button>
+          <button id="jump-end-button" class="button button-secondary" type="button" disabled>Jump to end</button>
+          <label class="speed-control" for="replay-speed">
+            <span>Playback speed</span>
+            <select id="replay-speed" disabled>
+              <option value="1100">Slow</option>
+              <option value="500" selected>Normal</option>
+              <option value="180">Fast</option>
+            </select>
+          </label>
+          <label class="sound-toggle" for="sound-enabled">
+            <input id="sound-enabled" type="checkbox" checked>
+            <span id="sound-toggle-label">Sound on</span>
+          </label>
+          <label class="sound-volume" for="sound-volume">
+            <span>Volume</span>
+            <input id="sound-volume" type="range" min="0" max="0.75" step="0.01" value="0.35" aria-label="Sound volume">
+            <output id="sound-volume-value" for="sound-volume">35%</output>
+          </label>
+          <span id="sound-status" class="sound-status" role="status" aria-live="polite">Sound starts after interaction.</span>
+        </div>
+
+        <div class="replay-details">
+          <section class="step-log-section" aria-labelledby="step-log-title">
+            <h2 id="step-log-title" class="subsection-title">Step log</h2>
+            <ol id="step-log" class="step-log">
+              <li class="step-log-empty">Steps will appear here after running an algorithm.</li>
+            </ol>
+          </section>
+          <section class="slot-legend-section" aria-labelledby="slot-legend-title">
+            <h2 id="slot-legend-title" class="subsection-title">Slot legend</h2>
+            <div id="slot-legend" class="slot-legend">
+              <span class="legend-empty">No slots yet</span>
+            </div>
+          </section>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="secondary-panels">
+    <section class="panel timetable-panel" aria-labelledby="timetable-title">
+      <div class="panel-heading">
+        <span class="section-number">04</span>
+        <h2 id="timetable-title">Exam Timetable</h2>
+      </div>
+      <div class="timetable-settings">
+        <label for="start-date">Start date
+          <input id="start-date" type="date">
+        </label>
+        <label for="slots-per-day">Slots per day
+          <select id="slots-per-day">
+            <option value="1">1 slot</option>
+            <option value="2" selected>2 slots</option>
+            <option value="3">3 slots</option>
+          </select>
+        </label>
+        <div id="slot-times" class="slot-time-fields">
+          <label for="slot-time-1">Slot 1 time
+            <input id="slot-time-1" class="slot-time-input" type="text" value="10:00 AM">
+          </label>
+          <label for="slot-time-2">Slot 2 time
+            <input id="slot-time-2" class="slot-time-input" type="text" value="2:00 PM">
+          </label>
+          <label for="slot-time-3">Slot 3 time
+            <input id="slot-time-3" class="slot-time-input" type="text" value="6:00 PM">
+          </label>
+        </div>
+        <label class="checkbox-label">
+          <input id="skip-sundays" type="checkbox" checked>
+          Skip Sundays
+        </label>
+        <label for="timetable-algorithm">Timetable from
+          <select id="timetable-algorithm">
+            <option value="backtracking" selected>Backtracking (minimum slots)</option>
+            <option value="greedy">Greedy</option>
+          </select>
+        </label>
+        <button id="generate-timetable-button" class="button button-primary" type="button">
+          Generate timetable
+        </button>
+      </div>
+      <div id="timetable-notices" class="panel-notices" role="status" aria-live="polite"></div>
+      <div class="table-wrap">
+        <table id="timetable-table">
+          <thead>
+            <tr><th>Slot</th><th>Date</th><th>Day</th><th>Time</th><th>Subjects</th></tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5" class="table-empty">Generate a timetable to view exam slots.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="clash-check" class="clash-check" aria-live="polite"></div>
+      <button id="download-csv-button" class="button button-secondary" type="button" disabled>
+        Download CSV
+      </button>
+    </section>
+
+    <section class="panel compare-panel" aria-labelledby="compare-title">
+      <div class="panel-heading">
+        <span class="section-number">05</span>
+        <h2 id="compare-title">Greedy vs Backtracking</h2>
+      </div>
+      <button id="compare-algorithms-button" class="button button-primary" type="button">
+        Compare algorithms
+      </button>
+      <div id="compare-notices" class="panel-notices" role="status" aria-live="polite"></div>
+      <div id="compare-results" class="table-wrap comparison-wrap">
+        <p class="table-empty">Build a graph, then compare the two algorithms.</p>
+      </div>
+      <div id="compare-verdict" class="compare-verdict"></div>
+      <div id="upper-bound" class="upper-bound"></div>
+    </section>
+  </div>
+
+  <script src="algorithms.js"></script>
+  <script src="graphBuilder.js"></script>
+  <script src="app.js"></script>
+  <script src="replay.js"></script>
+  <script src="timetable.js"></script>
+  <script src="timetable-ui.js"></script>
+</body>
+</html>
